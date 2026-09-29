@@ -36,7 +36,7 @@ See [wezterm.md](wezterm.md).
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `scratch_position` | `"top"` | Which edge the scratch pane starts against: `top` or `left`. Move it at runtime with `--flip` or `f` in `lma`; that choice is remembered per tmux server. |
+| `scratch_position` | `"left"` | Which edge the scratch pane starts against: `top` or `left`. Move it at runtime with `--flip` or `f` in `lma`; that choice is remembered per tmux server. |
 | `scratch_height` | `"10"` | Height of the scratch pane on top, in rows. |
 | `scratch_width` | `"45"` | Width of the scratch pane on the left, in columns. |
 | `follow_scratch` | `false` | Bootstrap follow mode for new tmux servers. When the scratch pane is first toggled on a server, this determines whether follow is enabled by default. See [tmux.md](tmux.md#follow-mode). |
@@ -88,18 +88,26 @@ The name may come from the interpreter's command line or the pane title. Add
 |-----|---------|-------------|
 | `transparent` | `false` | Use ANSI colors instead of RGB, allowing terminal transparency to work. |
 | `card_unread_style` | `"dot"` | Card-layout unread treatment: `"dot"`, or `"bar"` for a yellow title bar and provider-coloured model badge. |
-| `brief_status` | `false` | In card layout, color sessions with attached briefs by their `Status:` and show brief age. |
+| `brief_status` | `false` | Color sessions with attached briefs by their `Status:`; cards also show brief age. |
 | `brief_stale_hours` | `6` | Mark `working` and `waiting` cards stale after this many hours without a brief edit. |
 | `focus_color` | `"#2bd9cf"` | The scratch pane's title bar and bottom edge while its tmux pane will receive keys. Any Textual colour; the title text turns black or white to contrast with it. |
 
 With `brief_status = true`, attached briefs give `blocked` cards a yellow
-headline, `done` cards a blue headline, and `waiting` cards dimmer text.
+headline, `done` cards a blue headline, and `waiting` cards dimmer text. On blocked and
+done cards the model label becomes a badge in its provider colour.
 Right under the name and location, a card shows the first line of `Needs` from
 `## Now` with its label (`Needs Peter: ...`) in the attention colour, then the
 brief age, then, for a `waiting` brief, the first line of `Waiting on`. `working` cards retain the read style.
 Every brief card shows its age. Unread remains a separate dot, including when
 `card_unread_style = "bar"`. Cards without an attached brief retain their
-current appearance. This setting only changes cards, not the column layout.
+current appearance.
+
+In the column layout, a `blocked` row fills amber (deeper than the header's
+unread yellow, which it sorts right under) and a `done` row blue, with
+the model as the same badge, and a read `waiting` row dims. The green bar that
+marks the current session stays green. Rows carry no age, `Needs` or
+`Waiting on` lines; there is no room for them.
+
 Sessions sort by brief status in both layouts whether or not it is set; see
 [Session order](../README.md#session-order).
 
@@ -115,8 +123,6 @@ black text; the model label uses its provider colour as the background, with
 one coloured space on each side. Session emojis appear at the right end of the
 second line, just before the pin marker when present. A green selected-session
 bar remains green.
-The otherwise-empty blue/yellow table header is hidden in card layout because
-the unread rows now carry the status themselves.
 
 ```toml
 [tui]

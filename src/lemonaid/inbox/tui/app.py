@@ -53,7 +53,7 @@ from ...tmux.scratch import (
 )
 from ...tmux.session import spawn_session
 from .. import db, emoji, order, pins, unarchive, undo
-from . import backend_indicators, brief_cards
+from . import backend_indicators, brief_cards, brief_rows
 from .brief_view import BriefView
 from .error_screen import ErrorScreen
 from .help_screen import HelpScreen
@@ -108,7 +108,7 @@ _CARD_BODY_COLUMN = 0
 # when its model becomes known, and the labels share their right edge.
 _BACKEND_WIDTH = 11
 _CARD_MIN_TEXT = 16
-_CARD_CHROME_ROWS = 4  # header, status row, and a little slack
+_CARD_CHROME_ROWS = 3  # title, status row, and a little slack
 _INDENT = " "  # one column, so a card's body clears the marker but little else
 # Cards draw their own gutter - a single space, with the marker in the column
 # before it - so the table adds none. Every column a narrow pane spends on
@@ -341,10 +341,15 @@ def _as_card(
     else:
         headline = _right_aligned(headline, backend, width)
 
-    if card_brief and card_brief.status in {"blocked", "done"}:
-        background = ATTENTION_COLOR if card_brief.status == "blocked" else "#285995"
-        foreground = "#000000" if card_brief.status == "blocked" else "#ffffff"
-        headline.stylize(Style(color=foreground, bgcolor=background), 1 if is_here else 0)
+    if card_brief and card_brief.status in brief_cards.STATUS_STYLES:
+        headline.stylize(brief_cards.STATUS_STYLES[card_brief.status], 1 if is_here else 0)
+        if backend.plain:
+            # The model keeps its provider colour, as a badge, like the column row's.
+            provider = backend.get_style_at_offset(_CONSOLE, 0).color
+            headline.stylize(
+                Style(color="#000000", bgcolor=provider or ATTENTION_COLOR),
+                len(headline) - len(backend),
+            )
         if marker.plain:
             headline.stylize(
                 "bold #000000" if card_brief.status == "blocked" else UNREAD_MARKER_STYLE,
@@ -473,10 +478,24 @@ def _sync_rows(
                 now,
             )
             if cards
-            else cells,
+            else brief_rows.styled(
+                cells,
+                (briefs_by_row or {}).get(key),
+                _UNREAD_CELL,
+                _BACKEND_CELL,
+                _NAME_CELL,
+                gutter_width,
+            ),
         )
         for key, cells in rows
     ]
+
+    if isinstance(table, ClickToActTable):
+        table.row_backgrounds = {
+            key: fill
+            for key, _ in rows
+            if not cards and (fill := brief_rows.background((briefs_by_row or {}).get(key)))
+        }
 
     if [str(key.value) for key in table.rows] == [key for key, _ in shaped]:
         resized = False
@@ -654,8 +673,7 @@ class LemonaidApp(App):
         text-style: bold;
     }
 
-    /* The bar above the list is the table's header row, which carries no labels
-       in card layout - so it is free to carry the state of the list instead:
+    /* The column layout's header row also carries the state of the list:
        whether anything in it wants you, and which list you are looking at.
        The attention colour is shared with the unread marker, so the bar and
        dot remain the same lemon yellow by construction. */
@@ -1169,8 +1187,7 @@ class LemonaidApp(App):
 
         if self._cards(width, height):
             table.cell_padding = _CARD_CELL_PADDING
-            if table.id != "other_sources_table":
-                table.show_header = self.config.tui.card_unread_style != "bar"
+            table.show_header = False  # The card column has no label
             table.add_column("", width=20)  # The card body, stretched on resize
             return
 
@@ -1368,17 +1385,17 @@ class LemonaidApp(App):
             pinned = frozenset(pins.pinned_positions(conn))
             emojis = emoji.by_channel(conn)
 
-        card_briefs = (
+        briefs = (
             {
                 str(n.id): self._brief_cache.get(attached[n.channel])
                 for n in current_notifications
                 if n.channel in attached
             }
-            if self.config.tui.brief_status and self._card_width()
+            if self.config.tui.brief_status
             else {}
         )
         extra_lines = max(
-            (card.extra_lines for card in card_briefs.values() if card),
+            (card.extra_lines for card in briefs.values() if card and self._card_width()),
             default=0,
         )
 
@@ -1396,7 +1413,7 @@ class LemonaidApp(App):
             GUTTER_WIDTH,
             self.config.tui.card_unread_style,
             {str(n.id): emojis.get(n.channel, "") for n in current_notifications},
-            card_briefs,
+            briefs,
             self.config.tui.brief_stale_hours,
             time.time(),
         )
