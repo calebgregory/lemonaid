@@ -10,7 +10,7 @@ from pathlib import Path
 
 from ..config import load_config
 from ..inbox import db, emoji
-from . import attached, popup, pr, render, session, sidebar, target, write_cli
+from . import attached, family, popup, pr, render, session, sidebar, target, write_cli
 
 
 def _file_target(
@@ -87,7 +87,7 @@ def cmd_show(args: argparse.Namespace) -> None:
         return
 
     now = time.time()
-    shown = render.view(found, now, pr.configured(load_config().brief.pr_state))
+    shown = family.added(render.view(found, now, pr.configured(load_config().brief.pr_state)))
     if args.page:
         popup.page(shown, now, args.dismiss)
     else:
@@ -98,7 +98,7 @@ def setup_parser(subparsers: argparse._SubParsersAction) -> None:
     brief_parser = subparsers.add_parser(
         "brief",
         help="Where a lemon's work stands, from its brief",
-        description="A brief is a Markdown file in ~/.brief-lemons/ attached to one "
+        description="A brief is a Markdown file in ~/.lemons/brief/ attached to one "
         "lemon session (or, for older sessions, .z/brief.md or .z/brief-<name>.md in its "
         "place). Its Status line and `## Now` section are what the worker keeps current.",
     )

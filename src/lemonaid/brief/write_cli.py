@@ -12,6 +12,7 @@ import sys
 from collections import abc
 from pathlib import Path
 
+from .. import home
 from ..inbox import db
 from . import attached, identity, query_cli, selector, store
 
@@ -56,7 +57,12 @@ def _attach(
 
     window = f"{chosen.tmux_session}:{chosen.tmux_window}"
     attached.attach_pending(
-        conn, chosen.tmux_session, chosen.tmux_window, path, attached.newest_id(conn)
+        conn,
+        chosen.tmux_session,
+        chosen.tmux_window,
+        path,
+        attached.live_channels(conn),
+        chosen.tmux_window_id,
     )
     return (
         {"path": str(path), "lemon_id": lemon_id, "channel": None, "pending": window},
@@ -79,6 +85,9 @@ def _cmd_attach(args: argparse.Namespace) -> None:
 
 
 def _cmd_new(args: argparse.Namespace) -> None:
+    if paused := home.layout.paused():
+        _finish(args, {}, paused)
+
     try:
         path = store.create(args.title, datetime.date.today())
     except FileExistsError as e:
@@ -169,10 +178,10 @@ def add_parsers(brief_subparsers: argparse._SubParsersAction) -> None:
     own_id.set_defaults(func=query_cli.cmd_id)
 
     attach = _parser(brief_subparsers, "attach", "Attach a brief file to one lemon session")
-    attach.add_argument("file", help="A path, or a name inside ~/.brief-lemons/ (.md optional)")
+    attach.add_argument("file", help="A path, or a name inside ~/.lemons/brief/ (.md optional)")
     attach.set_defaults(func=_cmd_attach)
 
-    new = _parser(brief_subparsers, "new", "Create a dated brief in ~/.brief-lemons/ and attach it")
+    new = _parser(brief_subparsers, "new", "Create a dated brief in ~/.lemons/brief/ and attach it")
     new.add_argument("title", help="The task; the file is named <date>-<slug of title>.md")
     new.set_defaults(func=_cmd_new)
 

@@ -1,3 +1,18 @@
+# 0.35.0 (2026-09-29)
+
+#### Added
+
+- **Parent links between lemons, by Lemon-ID.** `lemonaid lemon parent` shows, sets or clears a lemon's parent, and `lemonaid lemon children` lists its children with their brief's `Status:` and channel. A link that would make a lemon its own ancestor is refused.
+- **`place open --brief F --parent self` records the parent when it opens the place**, before the child starts.
+- **The brief view shows a brief's parent and its children's status** under its card, in the sidebar, popup and `brief show`.
+- **`lemonaid tell --parent` and `tell --child <lemon>` follow those links.** A child whose lemon hasn't started yet gets the message in its inbox.
+- **Briefs and inboxes move to `~/.lemons/brief/` and `~/.lemons/inbox/`, with `lemonaid home migrate`.** Lemonaid keeps using `~/.brief-lemons/` until the migration finishes. The migration copies and verifies every file, rewrites the database's brief paths, and keeps the old home as a backup, refusing while any inbox waiter is running. See `docs/home.md`.
+
+#### Fixed
+
+- **A pending brief reaches a lemon resumed from the archive into its window.** It used to wait only for inbox rows newer than the request, and a resumed session keeps its old row.
+- **`brief attach --session S:NAME` finds a window by its tmux name, and follows it if tmux renumbers it.** A name tmux doesn't know is an error; before, a name was accepted and never matched.
+
 # 0.34.3 (2026-09-29)
 
 #### Fixed

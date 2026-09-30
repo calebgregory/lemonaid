@@ -3,10 +3,11 @@
 import argparse
 import dataclasses
 import json
+import sqlite3
 import sys
 from pathlib import Path
 
-from .. import brief
+from .. import brief, lineage
 from ..config import Config, PlaceRoot, load_config
 from ..inbox import db
 from . import lifecycle, ownership, toss_cli
@@ -32,18 +33,33 @@ def _attach_brief(
     in_root: bool,
     config: Config,
     harness: str,
-    after_id: int,
+    live_before: list[str],
 ) -> str | None:
     """Wait on the new session's harness window for its lemon. Returns an error, or None."""
     session = lifecycle.session_for(key, directory, in_root)
     if not session:
         return f"Opened, but could not tell which session is {directory}'s to attach {path}"
 
+    index = lifecycle.harness_window(config, harness)
+    _, window_id = brief.session.window(session, index)
     with db.connect() as conn:
-        brief.attached.attach_pending(
-            conn, session, lifecycle.harness_window(config, harness), path, after_id
-        )
+        brief.attached.attach_pending(conn, session, index, path, live_before, window_id)
     return None
+
+
+def _parent_link(conn: sqlite3.Connection, child_brief: Path, parent: str) -> tuple[str, str]:
+    """(child, parent) Lemon-IDs, checked before anything is opened; exits on an error."""
+    try:
+        child = brief.identity.ensure(conn, child_brief)
+        parent_id = (
+            brief.lemon.own_id(conn) if parent == "self" else brief.lemon.lemon_id(conn, parent)
+        )
+        lineage.links.check(conn, child, parent_id)
+    except (LookupError, ValueError, brief.store.ChangedUnderneath) as error:
+        print(f"--parent {parent}: {error}", file=sys.stderr)
+        sys.exit(1)
+
+    return child, parent_id
 
 
 def cmd_open(args: argparse.Namespace) -> None:
@@ -58,11 +74,18 @@ def cmd_open(args: argparse.Namespace) -> None:
         print(f"No brief at {brief_path}", file=sys.stderr)
         sys.exit(1)
 
+    if args.parent and not brief_path:
+        print("--parent needs --brief: a link is between two Lemon-IDs", file=sys.stderr)
+        sys.exit(1)
+
     # Taken before the session exists, so a lemon that starts quickly still counts.
-    after_id = 0
+    live_before: list[str] = []
+    link: tuple[str, str] | None = None
     if brief_path:
         with db.connect() as conn:
-            after_id = brief.attached.newest_id(conn)
+            live_before = brief.attached.live_channels(conn)
+            if args.parent:
+                link = _parent_link(conn, brief_path, args.parent)
 
     # Naming a root asks for its vocabulary explicitly, so an unusable one is an
     # error rather than something to read another way.
@@ -94,8 +117,12 @@ def cmd_open(args: argparse.Namespace) -> None:
 
     if brief_path and directory and not error:
         error = _attach_brief(
-            brief_path, args.key, directory, root is not None, config, args.harness, after_id
+            brief_path, args.key, directory, root is not None, config, args.harness, live_before
         )
+
+    if link and not error:
+        with db.connect() as conn:
+            lineage.links.set_parent(conn, *link)
 
     if args.json:
         print(
@@ -105,6 +132,8 @@ def cmd_open(args: argparse.Namespace) -> None:
                     "dir": str(directory) if directory else None,
                     "root": str(root.path) if root else None,
                     "brief": str(brief_path) if brief_path else None,
+                    "lemon_id": link[0] if link else None,
+                    "parent": link[1] if link else None,
                     "error": error,
                 }
             )
@@ -269,8 +298,15 @@ def setup_parser(subparsers: argparse._SubParsersAction) -> None:
         "--brief",
         default="",
         metavar="FILE",
-        help="Attach this brief (a path, or a name in ~/.brief-lemons/) to the first "
+        help="Attach this brief (a path, or a name in ~/.lemons/brief/) to the first "
         "lemon that starts in the session's harness window",
+    )
+    open_parser.add_argument(
+        "--parent",
+        default="",
+        metavar="LEMON",
+        help="Record LEMON (`self`, a Lemon-ID, channel, or brief) as the parent of "
+        "the --brief's lemon",
     )
     open_parser.add_argument(
         "-d",
