@@ -3,6 +3,7 @@
 #### Changed
 
 - **`lemonaid place toss` closes only the windows in a shared session.** The session and its other windows stay; a dedicated session still closes whole. The plan is made again after the confirmation prompt, and any change in tmux since stops the toss.
+- **A bare `lemonaid place toss` never falls back to the caller's own session.** A directory that isn't a listed place refuses, and closing the session the command runs in unattended (`--json` or `--yes`) needs its key.
 
 # 0.66.0 (2026-10-03)
 
